@@ -1,55 +1,110 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-	<head>
-	<meta charset="utf-8">
-	<title>html5+php分片上传超大文件代码示例</title>
-	</head>
-<body>
-    <input type="file" id="file" />
-    <button id="upload">上传</button>
-    <span id="output" style="font-size: 12px">等待</span>
-</body>
-<script src="./js/jquery-1.12.2.min.js"></script>
-<script>
-	var page = {
-		init : function() {
-			$("#upload").click($.proxy(this.upload, this));
-		},
+<head>
+<meta charset="utf-8">
+<title>html5+php分片上传超大文件代码示例</title>
+<style type="text/css">
+body,span,input,button {
+	margin: 0;
+	padding: 0;
+}
 
-		upload : function() {
-			var file = $("#file")[0].files[0], // 文件对象
-			name = file.name, // 文件名
-			size = file.size, // 总大小
-			succeed = 0;
-			var shardSize = 2 * 1024 * 1024, // 以2MB为一个分片
-			shardCount = Math.ceil(size / shardSize); // 总片数
-			for (var i = 0; i < shardCount; ++i) {
-				// 计算每一片的起始与结束位置
-				var start = i * shardSize, end = Math.min(size, start + shardSize);
-				// 构造一个表单，FormData是HTML5新增的
-				var form = new FormData();
-				form.append("data", file.slice(start, end)); // slice方法用于切出文件的一部分
-				form.append("name", name);
-				form.append("total", shardCount); // 总片数
-				form.append("index", i + 1); // 当前是第几片
-				// Ajax提交
-				$.ajax({
-					url : "uploadBigFile.html?act=upload",
-					type : "POST",
-					data : form,
-					async : true, // 异步
-					processData : false, // 很重要，告诉jquery不要对form进行处理
-					contentType : false, // 很重要，指定为false才能形成正确的Content-Type
-					success : function() {
-						++succeed;
-						$("#output").text(succeed + " / " + shardCount);
-					}
-				});
-			}
+#file {
+	display: block;
+	margin: 20px 0 10px 60px;
+}
+
+#upload {
+	margin-left: 60px;
+}
+</style>
+</head>
+<body>
+<input type="file" id="file" />
+<button id="upload">上传</button>
+<span id="output" style="font-size: 12px">等待</span>
+<script src="./js/jquery-1.12.2.min.js"></script>
+<script src="./js/layer-2.2/layer.js"></script>
+<script>
+	function upload()
+	{
+		var file = $("#file")[0].files[0];                  // 文件对象
+		if (file == undefined) {
+			layer.msg('请先选择文件');
+			return false;
 		}
-	};
-	$(function() {
-		page.init();
+
+		$(this).addClass('disabled');
+        var loading = layer.load(0, {shade: false});        // 0代表加载的风格，支持0-2
+        
+        var name = file.name;                               // 文件名
+        var size = file.size;                               // 文件总大小
+        var succeed = 0;                                    // 请求成功次数
+        var shardSize = 20971520;                           // 以20MB为一个分片
+        var shardCount = Math.ceil(size / shardSize);       // 总片数
+        for (var i = 0; i < shardCount; i++) {
+            // 计算每一片数据的起始与结束位置
+            var start = i * shardSize;
+            var end = Math.min(size, start + shardSize);
+            // 构造一个表单，FormData是HTML5新增的
+            var form = new FormData();
+            form.append("data", file.slice(start, end));    // slice方法用于切出文件的一部分
+            form.append("name", name);
+            form.append("total", shardCount);               // 总片数
+            form.append("index", i + 1);                    // 当前是第几片
+            // Ajax提交
+            $.ajax( {
+                url: "UploadBigFile.php?act=upload",
+                type: "POST",
+                data: form,
+                async: true,           // 异步
+                processData: false,    // 很重要，告诉jquery不要对form进行处理
+                contentType: false,    // 很重要，指定为false才能形成正确的Content-Type
+                success: function(data){
+                    var returnData = $.parseJSON(data); 
+                    if (returnData.errno == 200) {
+                    	++succeed;
+                    	console.log(succeed);
+                        $("#output").text(succeed + " / " + shardCount);
+                        if (succeed == shardCount) {
+                            $.ajax( {
+                                url: "UploadBigFile.php?act=join",
+                                type: "POST",
+                                data: {total: shardCount},
+                                success: function(data){
+                                	var returnData = $.parseJSON(data);
+                                    if (data.errno == 200) {
+                                        layer.open({content: '上传成功', time: 2});
+                                        setTimeout(function(){
+                                            $("#upload").removeClass('disabled');
+                                        }, 2000);
+                                    } else {
+                                        layer.open({content: '上传失败', time: 2});
+                                        setTimeout(function(){
+                                            location.reload(); 
+                                        }, 2000);
+                                    }
+                                }
+                            });
+                        }
+                    } else {
+                    	layer.open({content: '上传失败', time: 2});
+                    	setTimeout(function(){
+                            location.reload(); 
+                        }, 2000);
+                    }
+                }
+            });
+        }
+	}
+
+	$("#upload").click(function(){
+		if ($(this).hasClass('disabled')) {
+		    return false;
+		} else {
+			upload();
+		}
 	});
 </script>
+</body>
 </html>
